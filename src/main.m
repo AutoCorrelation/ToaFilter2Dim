@@ -16,7 +16,8 @@ RMSE = RMSE();
 % parameters
 params = struct();
 params.numParticles = 5000;
-params.numIterations = 1; %size(toaPos, 2);
+params.numIterations = 1e4; %size(toaPos, 2);
+params.pfIterations = 1e2;
 params.numPoints = size(toaPos, 3);
 params.numNoise = size(toaPos, 4);
 params.H = [...
@@ -28,19 +29,20 @@ params.H = [...
     0, 20];
 pinvH = pinv(params.H);
 
-%% Particlefilter
+%% Particlefilter-------------------------------------------------------------------
 pf_data = struct();
-pf_data.particles = zeros(2, params.numParticles, params.numPoints, params.numIterations, params.numNoise);
+pf_data.particles = zeros(2, params.numParticles, params.numPoints, params.pfIterations, params.numNoise);
 pf_data.vel = zeros(size(pf_data.particles));
-pf_data.weights = params.numParticles \ ones(params.numParticles, params.numPoints, params.numIterations, params.numNoise);
-pf_data.estimatedPos = zeros(2, params.numPoints, params.numIterations, params.numNoise);
+pf_data.weights = params.numParticles \ ones(params.numParticles, params.numPoints, params.pfIterations, params.numNoise);
+pf_data.estimatedPos = zeros(2, params.numPoints, params.pfIterations, params.numNoise);
 pf_data.RMSE = zeros(params.numNoise, 1);
 
 for countNoise = 1:params.numNoise
 % for countNoise = 5
     pf = ParticleFilter(countNoise, params.numParticles);
     
-    for countIter = 1:params.numIterations
+    % for countIter = 1:params.pfIterations
+    for countIter = 1:params.pfIterations
         for countPoint = 2:params.numPoints
             if countPoint < 3
                 pf_data.estimatedPos(:, countPoint-1, countIter, countNoise) = toaPos(:, countIter, countPoint-1, countNoise);
@@ -71,7 +73,7 @@ for countNoise = 1:params.numNoise
 end
 pf_data.RMSE = RMSE.getRMSE(pf_data.estimatedPos);
 
-%% Kalman Filter
+%% Kalman Filter----------------------------------------------------
 kf_data = struct();
 kf_data.estimatedPos = zeros(2, params.numPoints, params.numIterations, params.numNoise);
 kf_data.errCov = zeros(2, 2, params.numPoints, params.numIterations, params.numNoise);
@@ -98,10 +100,39 @@ for countNoise = 1:params.numNoise
 end
 
 kf_data.RMSE = RMSE.getRMSE(kf_data.estimatedPos);
-%% Plotting
+%% Kalman Filter modified----------------------------------------------------
+kf1_data = struct();
+kf1_data.estimatedPos = zeros(2, params.numPoints, params.numIterations, params.numNoise);
+kf1_data.errCov = zeros(2, 2, params.numPoints, params.numIterations, params.numNoise);
+kf1_data.vel = zeros(size(kf1_data.estimatedPos));
+kf1_data.RMSE = zeros(params.numNoise, 1);
+optimal_gamma = [0.5, 0.5, 0.4, 0.3, 0.5];
+
+for countNoise = 1:params.numNoise
+% for countNoise = 5
+    kf = KalmanFilter1(countNoise, params.H);
+    for countIter = 1:params.numIterations
+        for countPoint = 2:params.numPoints
+            if countPoint < 3
+                kf1_data.estimatedPos(:, countPoint-1, countIter, countNoise) = toaPos(:, countIter, countPoint-1, countNoise);
+                kf1_data.estimatedPos(:, countPoint, countIter, countNoise) = toaPos(:, countIter, countPoint, countNoise);
+                kf1_data.vel(:, countPoint, countIter, countNoise) = kf1_data.estimatedPos(:, countPoint, countIter, countNoise) - kf1_data.estimatedPos(:, countPoint-1, countIter, countNoise);
+            else
+                [xhat, Phat] = kf.predict(kf1_data.estimatedPos(:, countPoint-1, countIter, countNoise), kf1_data.errCov(:, :, countPoint-1, countIter, countNoise), kf1_data.vel(:, countPoint-1, countIter, countNoise), 1, countPoint, optimal_gamma(countNoise));
+                kf = kf.update(Phat, R(:, :, countIter, countPoint, countNoise));
+                [kf1_data.estimatedPos(:, countPoint, countIter, countNoise), kf1_data.errCov(:,:, countPoint, countIter, countNoise)] = kf.estimate(xhat, Phat, z(:, countIter, countPoint, countNoise));
+                kf1_data.vel(:, countPoint, countIter, countNoise) = kf1_data.estimatedPos(:, countPoint, countIter, countNoise) - kf1_data.estimatedPos(:, countPoint-1, countIter, countNoise);
+            end
+        end
+    end
+end
+
+kf1_data.RMSE = RMSE.getRMSE(kf1_data.estimatedPos);
+%% Plotting-----------------------------------------------------
 noisevalue = [0.01;0.1;1;10;100];
 figure;
 semilogx(noisevalue,kf_data.RMSE,'DisplayName','Kalman Filter');
 hold on;
 semilogx(noisevalue,pf_data.RMSE,'DisplayName','Particle Filter');
+semilogx(noisevalue,kf1_data.RMSE,'DisplayName','Kalman Filter 1');
 legend show;
