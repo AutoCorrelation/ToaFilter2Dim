@@ -45,7 +45,14 @@ classdef ParticleFilter
             y = zeros(size(w));
             R = R + 1e-6 * eye(size(R));
             for k = 1:length(w)
-                y(k) = w(k) * mvnpdf(z, pinvH*x(:, k), R);
+                % Method 1
+                % y(k) = w(k) * mvnpdf(z, pinvH*x(:, k), R);
+
+                % Method 2
+                error = z - pinvH * x(:, k);
+                y(k) = w(k) * exp(-0.5 * (error' * (R \ error)));
+
+                % Method 3
                 % y(k) = w(k) * mvnpdf(pinvH * z, x(:, k), pinvH * R * pinvH');
             end
             y = y / sum(y);

@@ -15,9 +15,9 @@ load('../data/R.mat');
 RMSE = RMSE();
 % parameters
 params = struct();
-params.numParticles = 5000;
+params.numParticles = 4000;
 params.numIterations = 1e4; %size(toaPos, 2);
-params.pfIterations = 1e2;
+params.pfIterations = 1e1;
 params.numPoints = size(toaPos, 3);
 params.numNoise = size(toaPos, 4);
 params.H = [...
@@ -28,6 +28,7 @@ params.H = [...
     20, 20
     0, 20];
 pinvH = pinv(params.H);
+
 
 %% Particlefilter-------------------------------------------------------------------
 pf_data = struct();
@@ -73,6 +74,7 @@ for countNoise = 1:params.numNoise
 end
 pf_data.RMSE = RMSE.getRMSE(pf_data.estimatedPos);
 
+
 %% Kalman Filter----------------------------------------------------
 kf_data = struct();
 kf_data.estimatedPos = zeros(2, params.numPoints, params.numIterations, params.numNoise);
@@ -100,6 +102,8 @@ for countNoise = 1:params.numNoise
 end
 
 kf_data.RMSE = RMSE.getRMSE(kf_data.estimatedPos);
+
+
 %% Kalman Filter modified----------------------------------------------------
 kf1_data = struct();
 kf1_data.estimatedPos = zeros(2, params.numPoints, params.numIterations, params.numNoise);
@@ -128,9 +132,11 @@ for countNoise = 1:params.numNoise
 end
 
 kf1_data.RMSE = RMSE.getRMSE(kf1_data.estimatedPos);
+
+
 %% Plotting-----------------------------------------------------
 noisevalue = [0.01;0.1;1;10;100];
-figure;
+% figure;
 semilogx(noisevalue,kf_data.RMSE,'DisplayName','Kalman Filter');
 hold on;
 semilogx(noisevalue,pf_data.RMSE,'DisplayName','Particle Filter');
